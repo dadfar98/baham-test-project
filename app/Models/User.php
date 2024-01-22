@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 
 use App\Models\Following;
@@ -93,24 +94,35 @@ class User extends Authenticatable
     }
 
     public function follow(User $user, Order $ongoing_order = null) {
-        $following = Following::create([
-            'user_id' => $this->id,
-            'follows_user_id' => $user->id,
-        ]);
 
-        if ($ongoing_order and $ongoing_order->status == 'ongoing') {
-            $following->order_id = $ongoing_order->id;
-            $following->save();
+        try{
+            $following = DB::transaction(function () use($user, $ongoing_order) {
+                $following = Following::create([
+                    'user_id' => $this->id,
+                    'follows_user_id' => $user->id,
+                ]);
 
-            $this->coins += Order::FOLLOWING_REWARD;
-            $this->save();
+                if ($ongoing_order and $ongoing_order->status == 'ongoing') {
+                    $following->order_id = $ongoing_order->id;
+                    $following->save();
 
-            $number_of_follows = Following::where('order_id', $ongoing_order->id)->count();
+                    $this->coins += Order::FOLLOWING_REWARD;
+                    $this->save();
 
-            if ($number_of_follows == $ongoing_order->followers_count) {
-                $ongoing_order->status = 'done';
-                $ongoing_order->save();
-            }
+                    $ongoing_order->added_followers += 1;
+                    $ongoing_order->save();
+
+                    if ($ongoing_order->added_followers >= $ongoing_order->followers_count) {
+                        $ongoing_order->status = 'done';
+                        $ongoing_order->save();
+                    }
+                }
+
+                return $following;
+            });
+
+        } catch (\throwable $e) {
+            $following = null;
         }
 
         return $following;

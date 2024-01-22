@@ -22,8 +22,9 @@ class FollowingController extends Controller
             $following = $user->follow($userToFollow, $ongoing_order);
 
             $response = [
-                'status' => true,
-                "following" => $following
+                'status' => is_null($following) ? false : true,
+                'following' => $following,
+                'message' => is_null($following) ? "follow failed" : "follow successfull"
             ];
 
             return response($response, 200);

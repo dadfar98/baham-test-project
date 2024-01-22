@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 use App\Models\Order;
 
@@ -44,26 +45,40 @@ class OrderController extends Controller
     {
         $user = auth()->user();
 
+        $wanted_followers_count = $request->followers_count;
         $needed_coins_amount = $request->followers_count * Order::FOLLOWER_PRICE;
+
         if ($user->coins < $needed_coins_amount) {
             return [
                 'status' => false,
-                'message' => "You need (". $needed_coins_amount. ") coins to get ". $request->followers_count. " followers. You have (". $user->coins .") coins. " .
+                'message' => "You need (". $needed_coins_amount. ") coins to get ". $wanted_followers_count . " followers. You have (". $user->coins .") coins. " .
                 "You can get coins by following other orders or buy coins." ];
         }
 
-        $user->coins -= $needed_coins_amount;
-        $user->save();
+        try {
+            $order = DB::transaction(function () use($user, $wanted_followers_count, $needed_coins_amount) {
+                $user->coins -= $needed_coins_amount;
+                $user->save();
 
-        $order = Order::create([
-            'user_id' => $user->id,
-            'followers_count' => $request->followers_count,
-        ]);
+                $order = Order::create([
+                    'user_id' => $user->id,
+                    'followers_count' => $wanted_followers_count,
+                ]);
 
-        $response = [
-            'status' => true,
-            'order' => $order
-        ];
+                return $order;
+            });
+
+            $response = [
+                'status' => true,
+                'order' => $order
+            ];
+
+        } catch(\Throwable $e) {
+            $response = [
+                'status' => false,
+                'message' => "failed to create order"
+            ];
+        }
 
         return response($response, 201);
     }
@@ -88,8 +103,9 @@ class OrderController extends Controller
             $following = $user->follow($orderToFollow->user, $orderToFollow);
 
             $response = [
-                'status' => true,
-                "following" => $following
+                'status' => is_null($following) ? false : true,
+                'following' => $following,
+                'message' => is_null($following) ? "follow failed" : "follow successfull"
             ];
 
             return response($response, 200);
@@ -99,19 +115,32 @@ class OrderController extends Controller
     }
 
     public function buyCoins(Request $request) {
+
         //Do the bank transaction to pay for new coins;
         $transaction_success = true;
 
         if ($transaction_success) {
             $user = auth()->user();
 
-            $user->coins += $request->coins_count;
-            $user->save();
+            $wanted_coins_count = $request->coins_count;
 
-            $response = [
-                'status' => true,
-                'message' => "transaction successfull"
-            ];
+            try {
+                DB::transaction(function () use($user, $wanted_coins_count) {
+                    $user->coins += $wanted_coins_count;
+                    $user->save();
+                });
+
+                $response = [
+                    'status' => true,
+                    'message' => "transaction successfull"
+                ];
+
+            } catch (\Throwable $e) {
+                $response = [
+                    'status' => false,
+                    'message' => "transaction failed"
+                ];
+            }
 
             return response($response, 200);
         }
