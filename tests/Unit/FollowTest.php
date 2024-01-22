@@ -31,15 +31,18 @@ class FollowTest extends TestCase
             'username' => 'sadegh',
             'coins' => 100,
         ]);
-        // Test when trying to follow a user who is not being followed
-        $response = $user1->canFollow($user2);
-        $this->assertTrue($response['status']);
-        $this->assertEquals("ok", $response['message']);
 
         // Test when trying to follow oneself
         $response = $user1->canFollow($user1);
         $this->assertFalse($response['status']);
         $this->assertEquals("you can't follow yourself", $response['message']);
+
+
+        // Test when trying to follow a user who is not being followed
+        $response = $user1->canFollow($user2);
+        $this->assertTrue($response['status']);
+        $this->assertEquals("ok", $response['message']);
+
 
         // Test when trying to follow a user already being followed
         $user1->follow($user2); // Assuming there is a follow method in the User model
@@ -101,7 +104,7 @@ class FollowTest extends TestCase
             'coins' => 100,
         ]);
 
-        $ongoing_order = Order::factory()->create(['user_id'=>  $user2->id, 'status' => 'done', 'followers_count' => 10]);
+        $ongoing_order = Order::factory()->create(['user_id'=>  $user2->id, 'status' => 'done', 'followers_count' => 10, 'added_followers' => 10]);
 
         $following = $user1->follow($user2, $ongoing_order);
 
@@ -109,6 +112,14 @@ class FollowTest extends TestCase
             'user_id' => $user1->id,
             'follows_user_id' => $user2->id,
             'order_id' => null
+        ]);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $ongoing_order->id,
+            'user_id' => $ongoing_order->user_id,
+            'followers_count' => $ongoing_order->followers_count,
+            'added_followers' => 10,
+            'status' => 'done'
         ]);
 
         $this->assertInstanceOf(Following::class, $following);
@@ -132,6 +143,14 @@ class FollowTest extends TestCase
             'user_id' => $user1->id,
             'follows_user_id' => $user2->id,
             'order_id' => $ongoing_order->id
+        ]);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $ongoing_order->id,
+            'user_id' => $ongoing_order->user_id,
+            'followers_count' => $ongoing_order->followers_count,
+            'added_followers' => 1,
+            'status' => 'ongoing'
         ]);
 
         $this->assertInstanceOf(Following::class, $following);
@@ -162,6 +181,14 @@ class FollowTest extends TestCase
             'user_id' => $user1->id,
             'follows_user_id' => $user2->id,
             'order_id' => $ongoing_order->id
+        ]);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $ongoing_order->id,
+            'user_id' => $ongoing_order->user_id,
+            'followers_count' => $ongoing_order->followers_count,
+            'added_followers' => 2,
+            'status' => 'done'
         ]);
 
         $this->assertInstanceOf(Following::class, $following);

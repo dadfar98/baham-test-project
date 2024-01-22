@@ -195,9 +195,17 @@ class OrderTest extends TestCase
             'order_id' => $order1->id
         ]);
 
+        $this->assertDatabaseHas('orders', [
+            'id' => $order1->id,
+            'user_id' => $order1->user_id,
+            'followers_count' => $order1->followers_count,
+            'added_followers' => 1,
+            'status' => 'ongoing'
+        ]);
+
         $response->assertStatus(200);
 
-        $this->assertEquals($response['status'], True);
+        $this->assertEquals($response['status'], true);
 
     }
 }
